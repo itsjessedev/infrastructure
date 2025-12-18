@@ -1,0 +1,16 @@
+# Python virtual environments (recreate per machine)
+system-utilities/image-downloader-env/
+system-utilities/video-analysis-env/
+system-utilities/*-env/
+**/__pycache__/
+**/*.pyc
+
+# Binaries (download via install script)
+system-utilities/bin/rg
+system-utilities/bin/yt-dlp
+
+# Logs and temporary files
+*.log
+*.tmp
+.DS_Store
+Thumbs.db

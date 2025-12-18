@@ -1,0 +1,10 @@
+#!/bin/bash
+# Wrapper script to run analyze-video.py with the correct venv
+
+SCRIPT_DIR="/home/jesse/utilities"
+VENV_DIR="$SCRIPT_DIR/video-analysis-env"
+PYTHON_SCRIPT="$SCRIPT_DIR/scripts/analyze-video.py"
+
+# Activate venv and run script
+source "$VENV_DIR/bin/activate"
+python "$PYTHON_SCRIPT" "$@"

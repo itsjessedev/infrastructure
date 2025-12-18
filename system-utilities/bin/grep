@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Prefer mgrep when it works; otherwise fall back to the system grep.
+
+use_mgrep() {
+  command -v mgrep >/dev/null 2>&1 || return 1
+  # Only attempt mgrep for simple "pattern [path]" calls (no flags, max one path).
+  [[ "$#" -ge 1 ]] || return 1
+  [[ "$1" == -* ]] && return 1
+  [ "$#" -le 2 ] || return 1
+  return 0
+}
+
+if use_mgrep "$@"; then
+  pattern="$1"; shift
+  path="${1:-.}"
+  tmp_err="$(mktemp)"
+  store="${MGREP_STORE:-mgrep}"
+  if output=$(mgrep --store "$store" search -r -m 2000 "$pattern" "$path" 2>"$tmp_err"); then
+    printf '%s\n' "$output"
+    rm -f "$tmp_err"
+    exit 0
+  else
+    err=$(cat "$tmp_err")
+    rm -f "$tmp_err"
+    # If the store is missing/unconfigured, silently fall back to system grep.
+    if [[ "$err" != *"Stores with identifiers"* ]]; then
+      printf '%s\n' "$err" >&2
+      exit 1
+    fi
+  fi
+fi
+
+# Fallback to system grep for anything mgrep cannot handle.
+exec /bin/grep "$@"

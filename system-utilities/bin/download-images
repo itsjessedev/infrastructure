@@ -1,0 +1,10 @@
+#!/bin/bash
+# Wrapper script to run download-images.py with the correct venv
+
+SCRIPT_DIR="/home/jesse/utilities"
+VENV_DIR="$SCRIPT_DIR/image-downloader-env"
+PYTHON_SCRIPT="$SCRIPT_DIR/scripts/download-images.py"
+
+# Activate venv and run script
+source "$VENV_DIR/bin/activate"
+python "$PYTHON_SCRIPT" "$@"
