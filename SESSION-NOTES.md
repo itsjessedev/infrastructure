@@ -4,33 +4,105 @@ This file tracks cross-project work and general development sessions.
 
 ## Current Status
 
-**Cakebuddy Phase 2 complete!** All major features implemented:
-- Push notifications (local with Notifee)
-- Google Sign-In with account linking
-- Advance reminders (7, 3, 1, day-of)
-- Phone contact import
-- RevenueCat payments integration
+**DealScout API setup in progress.** Gemini and Gmail APIs configured.
 
 ## Pending Tasks
 
-- [ ] Configure RevenueCat with actual API key
-- [ ] Set up products in App Store Connect / Google Play Console
-- [ ] Add Apple Sign-In before iOS launch
-- [ ] Prepare for Play Store listing
-- [ ] Create privacy policy
+- [x] Set up Gemini API key
+- [x] Set up Gmail OAuth credentials
+- [ ] Set up eBay API credentials
+- [ ] Set up Firebase (FCM for push notifications)
+- [ ] Test backend locally
+- [ ] Deploy to VPS (lab.junipr.io)
+- [ ] Build and test mobile app
 
 ## Next Steps
 
-1. **First thing next session:** Update WSL settings for 32GB RAM (user installed RAM upgrade)
-2. Configure RevenueCat dashboard and replace placeholder API key
-3. Test all Phase 2 features
-4. Prepare for app store submission
+1. Continue DealScout API setup (eBay, Firebase)
+2. Test backend locally with configured APIs
+3. Deploy to VPS
+4. Build mobile app
 
 ## Blockers/Dependencies
 
-None - all features implemented, just need RevenueCat configuration
+None - just need to finish API configuration
 
 ## Session Log
+
+### Session: 2024-12-21 (continued)
+**Accomplishments:**
+- Updated DealScoutAPI.md with account strategy:
+  - jesse@junipr.io for all API management
+  - dealscout25@gmail.com for Swoopa alerts
+- Set up Gemini API key in Google Cloud Console (DealScout project)
+- Configured Gmail API OAuth:
+  - Enabled Gmail API
+  - Created OAuth consent screen
+  - Added dealscout25@gmail.com as test user
+  - Created Desktop app OAuth credentials
+  - Downloaded and placed credentials.json
+- Added Gemini API key to backend .env
+- Added screenshot path convention to global CLAUDE.md
+- Synced global context files (CLAUDE.md → AGENTS.md, GEMINI.md)
+
+**Files Modified:**
+- /mnt/c/Users/Jesse/Desktop/DealScoutAPI.md - Account strategy updates
+- ~/portfolio/dealscout/backend/.env - Added Gemini API key
+- ~/portfolio/dealscout/backend/credentials.json - Gmail OAuth credentials
+- ~/CLAUDE.md - Added screenshot path convention
+- ~/AGENTS.md, ~/GEMINI.md - Synced from CLAUDE.md
+
+**Next Session:**
+1. Set up eBay API credentials
+2. Set up Firebase project and FCM
+3. Test backend locally
+
+---
+
+### Session: 2024-12-21
+**Accomplishments:**
+- Built complete DealScout app from scratch (deal discovery + flip tracking)
+- Conducted market research on Swoopa competitors and reseller tool market
+- Designed app for ANY item type (not just PC parts)
+- Created FastAPI backend with:
+  - Gmail API email ingestion for Swoopa alerts
+  - Gemini Flash AI classification (category, brand, model, condition)
+  - eBay API price lookup (used/new sold listings)
+  - Profit calculation with fee handling
+  - Firebase Cloud Messaging push notifications
+  - Scheduler: email checks (5min), review reminders (15min)
+- Created React Native/Expo mobile app with:
+  - Deals feed with "Needs Review" section for unknown conditions
+  - Current Flips inventory tracker
+  - Profits history with filters (date, category, platform)
+  - Settings screen
+- Wrote comprehensive API setup guide to Windows Desktop
+
+**Commits Made:**
+- dealscout: "Initial DealScout implementation" (31 files, 3840 lines)
+
+**Repo Created:**
+- https://github.com/junipr-dev/dealscout (public, portfolio-worthy)
+
+**Key Design Decisions:**
+- Item-agnostic: Works for any marketplace item, not just PC parts
+- Condition detection: AI detects new/used, asks user if unclear (never guesses)
+- 15-min review checks: Hardcoded, no settings needed
+- eBay lookup matches condition: New items → new sold prices, used → used
+
+**Files Created:**
+- ~/portfolio/dealscout/ - Full project structure
+- Backend: FastAPI with SQLite, services for Gmail/Gemini/eBay/FCM
+- Mobile: React Native with 4 tab screens
+- /mnt/c/Users/Jesse/Desktop/DealScoutAPI.md - Setup guide
+
+**Next Steps:**
+1. Set up API keys (Gemini, eBay, Gmail OAuth, Firebase)
+2. Test backend locally
+3. Deploy to VPS (lab.junipr.io)
+4. Build and test mobile app
+
+---
 
 ### Session: 2024-12-20 (continued)
 **Accomplishments:**
