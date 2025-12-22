@@ -39,6 +39,40 @@ This file tracks cross-project work and general development sessions.
 
 ## Session Log
 
+### Session: 2024-12-22 17:35 (WSL Auto-Start Fix v2)
+**Status:** Rebooted - VBScript did NOT work
+
+**Problem:** VBScript in Startup folder doesn't reliably start WSL
+
+**Solution:** Use Task Scheduler with proper PowerShell command:
+```powershell
+# Run in PowerShell as Admin
+schtasks /delete /tn "Start WSL" /f 2>$null
+$action = New-ScheduledTaskAction -Execute "wsl.exe" -Argument "-d Ubuntu -- sleep infinity"
+$trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERNAME"
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+$principal = New-ScheduledTaskPrincipal -UserId "$env:USERNAME" -LogonType Interactive -RunLevel Limited
+Register-ScheduledTask -TaskName "Start WSL" -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description "Keep WSL running for Syncthing"
+```
+
+**Key fixes:**
+- `sleep infinity` keeps WSL alive (old task exited immediately)
+- AllowStartIfOnBatteries - works on laptop
+- DontStopIfGoingOnBatteries - won't kill when unplugged
+- StartWhenAvailable - runs if missed
+
+**After reboot, verify with:**
+- Check if WSL is running without opening terminal
+- `wsl -l -v` in PowerShell should show Ubuntu running
+- Syncthing should be accessible at http://localhost:8384
+
+**Cleanup:** Delete useless VBScript:
+```powershell
+Remove-Item "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\start-wsl.vbs"
+```
+
+---
+
 ### Session: 2024-12-22 17:15 (WSL Auto-Start Fix)
 **Accomplishments:**
 - Fixed Syncthing not auto-starting on Windows login
