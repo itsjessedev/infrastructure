@@ -39,6 +39,32 @@ This file tracks cross-project work and general development sessions.
 
 ## Session Log
 
+### Session: 2024-12-22 17:15 (WSL Auto-Start Fix)
+**Accomplishments:**
+- Fixed Syncthing not auto-starting on Windows login
+  - Root cause: WSL doesn't start until terminal is opened, even with systemd enabled
+  - Created VBScript startup script: `start-wsl.vbs` in Windows Startup folder
+  - Script silently runs `wsl.exe -d Ubuntu -- sleep infinity` to keep WSL alive
+- Reviewed session status and all repository states
+
+**Files Created:**
+- `/mnt/c/Users/Jesse/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup/start-wsl.vbs`
+
+**Commits Made:**
+- dealscout: "Add mobile package-lock.json" (976d1e6)
+
+**Next Session:**
+1. Verify WSL auto-start works after reboot
+2. If working, verify Syncthing starts automatically
+3. Continue with SaveState/DealScout work
+
+**Context for Next Session (if auto-start fails):**
+- VBScript location: Windows Startup folder
+- Script content: `objShell.Run "wsl.exe -d Ubuntu -- sleep infinity", 0, False`
+- Alternative fixes: Windows Task Scheduler, or native Windows Syncthing
+
+---
+
 ### Session: 2024-12-22 02:00 (Laptop Setup & Syncthing)
 **Accomplishments:**
 - Set up laptop WSL2 environment to mirror desktop:
