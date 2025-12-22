@@ -59,9 +59,17 @@ This file tracks cross-project work and general development sessions.
 3. Continue with SaveState/DealScout work
 
 **Context for Next Session (if auto-start fails):**
-- VBScript location: Windows Startup folder
+- VBScript location: `C:\Users\Jesse\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\start-wsl.vbs`
 - Script content: `objShell.Run "wsl.exe -d Ubuntu -- sleep infinity", 0, False`
-- Alternative fixes: Windows Task Scheduler, or native Windows Syncthing
+- The old Task Scheduler "Start WSL" task was broken because:
+  - It ran `wsl -d Ubuntu` without a command, so WSL started and immediately exited
+  - Had `No Start On Batteries` restriction (bad for laptop)
+  - Last Result was -1 (failure)
+- Task Scheduler task should be deleted (needs admin: `schtasks /delete /tn "Start WSL" /f`)
+- If VBScript doesn't work, alternatives:
+  1. Fix Task Scheduler: `wsl -d Ubuntu -- sleep infinity` with battery restriction removed
+  2. Use native Windows Syncthing (no WSL dependency)
+  3. Use both VBScript + Task Scheduler for redundancy
 
 ---
 
