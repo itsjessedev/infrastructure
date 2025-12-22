@@ -4,7 +4,7 @@ This file tracks cross-project work and general development sessions.
 
 ## Current Status
 
-**DealScout nearly ready.** All APIs configured except eBay (pending account approval). VPS subdomain configured.
+**Desktop/Laptop sync in progress.** Syncthing + Tailscale configured for full ~/home/jesse sync between machines.
 
 ## Pending Tasks
 
@@ -13,25 +13,76 @@ This file tracks cross-project work and general development sessions.
 - [x] Set up Firebase (FCM for push notifications)
 - [x] Complete Gmail OAuth flow (token.pickle)
 - [x] Set up VPS subdomain (dealscout.junipr.io)
+- [x] Set up laptop WSL environment
+- [x] Set up Syncthing for home folder sync
+- [x] Set up Tailscale for direct P2P connection
 - [ ] Wait for eBay API account approval (dev@junipr.io)
 - [ ] Add eBay credentials to .env
-- [ ] Deploy backend to VPS
-- [ ] Test full flow
+- [ ] Deploy DealScout backend to VPS
+- [ ] Test full DealScout flow
 - [ ] Build and test mobile app
+- [ ] Complete initial Syncthing sync (in progress)
+- [ ] Switch Syncthing to two-way sync after initial sync
 
 ## Next Steps
 
-1. Wait for eBay developer account approval (1+ business day)
-2. Add eBay credentials to backend/.env
-3. Deploy backend to dealscout.junipr.io
-4. Sign up for Swoopa free trial
-5. Test full deal flow
+1. Let Syncthing initial sync complete (~30-60 min)
+2. Switch both machines to "Send & Receive" mode
+3. Wait for eBay developer account approval
+4. Add eBay credentials to backend/.env
+5. Deploy DealScout backend
 
 ## Blockers/Dependencies
 
 - eBay Developer account pending approval (registered with dev@junipr.io)
+- Initial Syncthing sync in progress (~11 GB)
 
 ## Session Log
+
+### Session: 2024-12-22 02:00 (Laptop Setup & Syncthing)
+**Accomplishments:**
+- Set up laptop WSL2 environment to mirror desktop:
+  - Created laptop-wsl-setup.txt with full instructions
+  - Cloned all git repos (dealscout, junipr, projects, infrastructure, dotfiles, media-server, study-buddy)
+  - Applied dotfiles with stow
+  - Installed all apt packages, nvm, node, npm global packages
+  - Created verify-wsl-setup.sh verification script
+- Set up Syncthing for ~/home/jesse folder sync:
+  - Installed Syncthing on both machines
+  - Created .stignore for machine-specific exclusions (.ssh, node_modules, venv, etc.)
+  - Configured desktop as "Send Only", laptop as "Receive Only" for safe initial sync
+  - Connected devices via Tailscale for direct P2P (not relay)
+- Set up Tailscale on both machines:
+  - Desktop: 100.120.124.100 (jesse-desktop)
+  - Laptop: 100.78.98.78 (jesse-laptop)
+  - Direct mesh VPN connection for fast sync anywhere
+- Created transfer.zip with non-git files:
+  - ~/CLAUDE.md, ~/AGENTS.md, ~/GEMINI.md
+  - DealScout backend credentials (.env, credentials.json, firebase-service-account.json, token.pickle)
+
+**Files Created:**
+- /mnt/c/Users/Jesse/Desktop/laptop-wsl-setup.txt - Setup instructions
+- /mnt/c/Users/Jesse/Desktop/verify-wsl-setup.sh - Verification script
+- /mnt/c/Users/Jesse/Desktop/transfer.zip - Non-git files for manual transfer
+- ~/.stignore - Syncthing exclusion patterns
+
+**Commits Made:**
+- media-server: "Update context files (AGENTS.md, GEMINI.md)" (ca7d6e3)
+
+**Next Session:**
+1. Verify Syncthing initial sync completed
+2. Switch both machines to "Send & Receive" mode
+3. Test bidirectional sync
+4. Continue with DealScout/SaveState work
+
+**Notes:**
+- Syncthing uses Tailscale IPs for direct connection (not relay servers)
+- Initial sync is ~11 GB, ETA 30-60 minutes
+- After sync completes, run on both machines:
+  - `syncthing cli config folders home type set sendreceive`
+  - `systemctl --user restart syncthing`
+
+---
 
 ### Session: 2024-12-22 (SaveState Business Planning)
 **Accomplishments:**
