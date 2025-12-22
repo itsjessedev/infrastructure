@@ -33,6 +33,36 @@ This file tracks cross-project work and general development sessions.
 
 ## Session Log
 
+### Session: 2024-12-22 (SaveState Business Planning)
+**Accomplishments:**
+- Planned SaveState electronics resale business:
+  - Defined product categories: retro gaming, PC parts, phones, vintage audio, test equipment
+  - Researched sourcing channels: estate sales, thrift stores, liquidation pallets
+  - Identified Liquidation.com and BlueLots as no-license-required bulk sources
+  - Created profitability framework and pricing strategy
+  - Documented phone verification process (IMEI checks, activation lock, carrier lock)
+- Chose business name: SaveState
+- Registered domain: savestate.shop
+- Set up project folder at ~/projects/savestate/ with:
+  - README.md with full business plan
+  - Inventory tracking guide
+  - Folder structure (inventory, finances, sourcing, listings, repairs, docs)
+
+**Commits Made:**
+- projects: "Add SaveState electronics resale business project" (4a8584a)
+
+**Next Session:**
+1. Create professional eBay HTML listing template for SaveState
+2. Design branding (colors, logo placeholder)
+3. Set up eBay store account
+4. Create inventory spreadsheet
+
+**Notes:**
+- Reopening in ~/projects/savestate/ to build eBay listing template
+- User wants "professional af" HTML template with graphics
+
+---
+
 ### Session: 2024-12-22 00:30
 **Accomplishments:**
 - Set up eBay Developer account with dev@junipr.io (pending approval, old account was suspended)
