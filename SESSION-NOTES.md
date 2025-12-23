@@ -4,7 +4,7 @@ This file tracks cross-project work and general development sessions.
 
 ## Current Status
 
-**Desktop/Laptop sync in progress.** Syncthing + Tailscale configured for full ~/home/jesse sync between machines.
+**Desktop/Laptop sync configured.** Syncthing + Tailscale running in WSL on both machines. Bidirectional sync active.
 
 ## Pending Tasks
 
@@ -16,28 +16,52 @@ This file tracks cross-project work and general development sessions.
 - [x] Set up laptop WSL environment
 - [x] Set up Syncthing for home folder sync
 - [x] Set up Tailscale for direct P2P connection
+- [x] Complete initial Syncthing sync
+- [x] Switch Syncthing to two-way sync
 - [ ] Wait for eBay API account approval (dev@junipr.io)
 - [ ] Add eBay credentials to .env
 - [ ] Deploy DealScout backend to VPS
 - [ ] Test full DealScout flow
 - [ ] Build and test mobile app
-- [ ] Complete initial Syncthing sync (in progress)
-- [ ] Switch Syncthing to two-way sync after initial sync
 
 ## Next Steps
 
-1. Let Syncthing initial sync complete (~30-60 min)
-2. Switch both machines to "Send & Receive" mode
-3. Wait for eBay developer account approval
-4. Add eBay credentials to backend/.env
-5. Deploy DealScout backend
+1. Wait for eBay developer account approval
+2. Add eBay credentials to backend/.env
+3. Deploy DealScout backend
+4. Continue with SaveState/DealScout work
 
 ## Blockers/Dependencies
 
 - eBay Developer account pending approval (registered with dev@junipr.io)
-- Initial Syncthing sync in progress (~11 GB)
 
 ## Session Log
+
+### Session: 2025-12-22 19:30 (Sync Setup Finalized)
+**Accomplishments:**
+- Abandoned Windows-native Syncthing/Tailscale approach (files in WSL require WSL running anyway)
+- Reinstalled Syncthing + Tailscale in WSL on desktop
+- Configured bidirectional sync between desktop and laptop
+- Removed old Windows Tailscale entry, renamed WSL to jesse-desktop
+- Cleaned up failed WSL auto-start attempts (Task Scheduler, VBScript)
+- Created SYNC-SETUP.md documentation with full config details
+
+**Commits Made:**
+- study-buddy: "Update package-lock.json files" (06dc757)
+- infrastructure: "Add desktop/laptop sync setup documentation" (9f622b3)
+
+**Sync Config:**
+- Desktop Tailscale: 100.125.236.116 (jesse-desktop)
+- Laptop Tailscale: 100.78.98.78 (jesse-laptop)
+- Desktop Syncthing ID: JZ33BAM-2R4H57F-NHNBK4U-NHEA4UJ-5HUXT5V-ESWXPJK-7HBKOCP-GGUCIAQ
+- Laptop Syncthing ID: K42WERT-V243B4F-S47OD3C-CCUKUWG-LJZVYQR-GGHOJRE-QGVY7LA-QP727AB
+
+**Notes:**
+- WSL auto-start still not solved - user will try their own approach
+- Sync works when WSL is running on both machines
+- See infrastructure/SYNC-SETUP.md for full documentation
+
+---
 
 ### Session: 2024-12-22 17:35 (WSL Auto-Start Fix v2)
 **Status:** Rebooted - VBScript did NOT work
