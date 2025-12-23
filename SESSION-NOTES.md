@@ -19,23 +19,64 @@ This file tracks cross-project work and general development sessions.
 - [x] Complete initial Syncthing sync
 - [x] Switch Syncthing to two-way sync
 - [x] Wait for eBay API account approval (dev@junipr.io) - APPROVED
-- [ ] Add eBay credentials to .env
-- [ ] Deploy DealScout backend to VPS
-- [ ] Test full DealScout flow
-- [ ] Build and test mobile app
+- [x] Add eBay credentials to .env
+- [x] Deploy DealScout backend to VPS
+- [x] Test full DealScout flow (AI classification + eBay lookup working)
+- [x] Build and test mobile app (SDK 54 running in Expo Go)
+- [ ] Set up Swoopa alerts to dealscout25@gmail.com for real email testing
+- [ ] Test push notifications with development build (not Expo Go)
+- [ ] Complete mobile app testing (all screens functional)
 
 ## Next Steps
 
-1. Wait for eBay developer account approval
-2. Add eBay credentials to backend/.env
-3. Deploy DealScout backend
-4. Continue with SaveState/DealScout work
+1. Set up Swoopa marketplace alerts to dealscout25@gmail.com
+2. Test real email ingestion flow
+3. Create Expo development build for push notifications
+4. Polish mobile app UI and fix remaining issues
 
 ## Blockers/Dependencies
 
-- None currently (eBay Developer account approved)
+- Push notifications don't work in Expo Go for SDK 53+ (need development build)
 
 ## Session Log
+
+### Session: 2025-12-23 01:00
+**Accomplishments:**
+- Configured eBay API credentials in backend/.env
+- Deployed DealScout backend to VPS (dealscout.junipr.io)
+- Fixed Gemini API quota issues by switching to OpenRouter API
+- Rewrote gemini_classifier.py to use OpenRouter (google/gemini-2.0-flash-001)
+- Successfully tested full pipeline: classification → eBay lookup → profit calculation
+- Upgraded mobile app to Expo SDK 54 for Expo Go compatibility
+- Fixed multiple toFixed() errors (API returns strings, not numbers)
+- Added Android-compatible purchase modal (Alert.prompt is iOS-only)
+- Added placeholder app icons for Expo
+- Configured Cloudflare WAF exception for dealscout.junipr.io API access
+- Added Cloudflare API credentials to global CLAUDE.md
+- Added troubleshooting note to global CLAUDE.md about dependency issues
+- Fixed backend profit_calculator.py Decimal type conversion error
+
+**Commits Made:**
+- dealscout: "Session end: Mobile app fixes, OpenRouter integration, Cloudflare config" (49d11d6)
+
+**Pending Tasks:**
+- [ ] Set up Swoopa alerts to dealscout25@gmail.com
+- [ ] Test purchase flow (I Bought This button) end-to-end
+- [ ] Test Mark Sold flow
+- [ ] Create development build for push notifications
+
+**Next Steps:**
+1. Set up Swoopa marketplace alerts
+2. Test complete user flow in mobile app
+3. Create Expo development build for push notifications
+
+**Notes:**
+- Push notifications don't work in Expo Go for SDK 53+
+- Cloudflare exception added to WAF rule for dealscout.junipr.io
+- OpenRouter API key stored in backend/.env (sk-or-v1-...)
+- Mobile app API URL: https://dealscout.junipr.io
+
+---
 
 ### Session: 2025-12-22 20:00
 **Accomplishments:**
