@@ -81,9 +81,14 @@ Laptop connects to desktop at: `tcp://100.125.236.116:22000`
 2. Check Syncthing is running: `systemctl --user status syncthing`
 3. Check web UI for errors: http://localhost:8384
 
-### WSL not starting (desktop)
-WSL must be running for Syncthing to work. Open a terminal to start WSL.
-Note: Auto-start at login was attempted but didn't work reliably.
+### WSL Auto-Start
+WSL must be running for Syncthing to work.
+
+**Solution:** In Windows Terminal Preview settings:
+1. Enable "Launch on machine startup"
+2. Set Ubuntu as the default profile
+
+This opens a terminal window at boot, which starts WSL and keeps Syncthing running.
 
 ### Relay vs Direct
 If Tailscale shows "relay" instead of "direct", the machines are going through a relay server (slower).
