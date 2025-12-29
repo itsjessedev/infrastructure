@@ -6,6 +6,58 @@
 - 250GB: Dev Lab VM
 - 750GB: ARR Stack (later)
 
+**Network Config (match existing media server):**
+- Static IP: `192.168.99.83` (or choose nearby like `.84`)
+- SSH Port: `25831`
+- User: `jesse`
+
+---
+
+## Accessing the Dev Lab from Windows
+
+**You do NOT need WSL anymore.** The dev lab IS your Linux environment.
+
+### Option 1: Windows Terminal + Native SSH (Recommended)
+```powershell
+# From PowerShell or Windows Terminal
+ssh -p 25831 jesse@192.168.99.84  # Local network
+ssh jesse@100.x.x.x              # Tailscale (from anywhere)
+```
+
+### Option 2: VS Code Remote SSH (Best for coding)
+1. Install "Remote - SSH" extension
+2. Add to SSH config: `jesse@TAILSCALE_IP`
+3. Full VS Code on remote files with integrated terminal
+
+### Option 3: Windows Terminal SSH Profile
+Add to Windows Terminal settings.json:
+```json
+{
+  "name": "Dev Lab",
+  "commandline": "ssh jesse@100.x.x.x",
+  "icon": "🖥️"
+}
+```
+
+### Where Claude Code Runs
+Claude Code runs **on the dev lab server**, not on Windows:
+1. SSH into dev lab
+2. Run `claude` command
+3. Claude operates directly on Linux filesystem
+
+**WSL is no longer needed** - uninstall it after migration is verified.
+
+### Option 4: Mobile SSH (Emergency Only)
+
+**iOS:** Termius (free) or Blink Shell ($20)
+**Android:** Termius or JuiceSSH (free)
+
+Setup:
+1. Install Tailscale on phone, sign in with same account
+2. In SSH app, connect to: `jesse@100.x.x.x` port `25831`
+
+Use for emergency fixes, quick git ops, or checking build status. Real coding → use laptop/desktop.
+
 ---
 
 ## Phase 1: Unraid Initial Setup
@@ -122,14 +174,79 @@
    ip addr show
    ```
 
-### 2.4 Initial VM Access
+### 2.4 Initial VM Access & Static IP Setup
 
 ```bash
-# From your current WSL machine
+# From your current WSL machine (use IP shown in VNC console)
 ssh jesse@DEVLAB_IP
 
 # First thing - update system
 sudo apt update && sudo apt upgrade -y
+```
+
+### 2.5 Configure Static IP (Match Media Server Subnet)
+
+```bash
+# Find your network interface name
+ip link show  # Usually ens3 or enp1s0 for VMs
+
+# Edit netplan config
+sudo nano /etc/netplan/00-installer-config.yaml
+```
+
+Replace contents with:
+```yaml
+network:
+  version: 2
+  ethernets:
+    ens3:  # Change to your interface name
+      dhcp4: no
+      addresses:
+        - 192.168.99.84/24  # Static IP (near media server's .83)
+      routes:
+        - to: default
+          via: 192.168.99.1  # Your router IP
+      nameservers:
+        addresses:
+          - 8.8.8.8
+          - 8.8.4.4
+```
+
+Apply and test:
+```bash
+sudo netplan apply
+ip addr show  # Verify new IP
+ping 8.8.8.8  # Verify internet
+```
+
+### 2.6 Configure SSH on Custom Port (25831)
+
+```bash
+# Edit SSH config
+sudo nano /etc/ssh/sshd_config
+
+# Find and change/add:
+Port 25831
+PermitRootLogin no
+PasswordAuthentication yes  # Change to 'no' after key setup
+
+# Restart SSH
+sudo systemctl restart ssh
+
+# Verify
+sudo ss -tlnp | grep 25831
+```
+
+**Update firewall:**
+```bash
+sudo ufw allow 25831/tcp
+sudo ufw enable
+sudo ufw status
+```
+
+**Test from WSL:**
+```bash
+ssh -p 25831 jesse@192.168.99.84
 ```
 
 ---
