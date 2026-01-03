@@ -40,6 +40,38 @@ This file tracks cross-project work and general development sessions.
 
 ## Session Log
 
+### Session: 2026-01-02 17:30
+**Accomplishments:**
+- Set up Claude Code on LAPTOP to match DESKTOP configuration
+- Installed Node.js v24.12.0 LTS via winget on LAPTOP
+- Installed Git v2.52.0 via winget on LAPTOP
+- Installed Claude Code v2.0.76 via npm on LAPTOP
+- Copied all 10 slash commands from DESKTOP to LAPTOP:
+  - /hi, /bye, /goodnight, /check-repos, /save
+  - /brand-design, /wp-install, /wp-setup, /wp-update, /wp-update-all
+- Copied all 8 skills from DESKTOP to LAPTOP:
+  - dealscout-debug, expo-dev, fastapi-backend
+  - scaffold-component, scaffold-endpoint, scaffold-screen
+  - study-buddy-content, vps-deploy
+- Configured bypassPermissions mode on LAPTOP
+- Set up custom status line (shows model + context %) on LAPTOP
+- LAPTOP now has identical Claude Code setup as DESKTOP
+
+**Commits Made:**
+- None (no code changes, only LAPTOP configuration)
+
+**Pending Tasks:**
+- [ ] Test Claude Code on LAPTOP to verify everything works
+
+**Next Steps:**
+1. User can now run Claude Code on LAPTOP with full feature parity
+
+**Notes:**
+- LAPTOP Claude Code accessible via: `claude` command in PowerShell
+- Config location: `C:\Users\Jesse\.claude\`
+
+---
+
 ### Session: 2025-12-31 (New Year's Eve)
 **Accomplishments:**
 - Completed DESKTOP network drive setup:
