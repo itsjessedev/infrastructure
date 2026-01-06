@@ -774,6 +774,64 @@ cd ~/projects/cakebuddy/app && npx react-native start --host 0.0.0.0
 
 ---
 
+## Session: 2026-01-06 15:15 (Security Cleanup & Media Server)
+
+### Accomplished
+- **Removed Topaz Video AI from DESKTOP:**
+  - Deleted program data folders (ProgramData, AppData/Local, AppData/Roaming)
+  - Removed Start Menu shortcuts
+  - Cleaned registry entries (HKCU\SOFTWARE\Topaz Labs LLC)
+  - Removed file associations (.mkv, .mpg)
+  - Deleted installer from Downloads
+
+- **Discovered and removed ScreenConnect backdoor:**
+  - Found malicious "Visual C++" service in C:\Program Files (x86)\Windows VC\
+  - Service was connecting to 95.214.234.238 (edgeserv.ru) on port 8041
+  - Came bundled with cracked Topaz Video AI from FTUApps.com
+  - Stopped service, deleted files, removed registry entries
+  - Router was blocking most connection attempts
+
+- **General security audit on DESKTOP:**
+  - Verified AVG Driver Updater is legitimate (user confirmed)
+  - Checked hosts file - has protective FitGirl blocks
+  - Verified SSH authorized keys and user accounts are clean
+
+- **Blocked usrpubtrk.com tracking domain:**
+  - Added to Unraid /etc/hosts (0.0.0.0 usrpubtrk.com)
+  - Added to /boot/config/go for persistence across reboots
+  - Was being triggered by ARR stack, not needed for downloads
+
+- **Fixed stalled qBittorrent downloads:**
+  - Removed 2 stalled Regular Show torrents (wrong episode numbering)
+  - Found 4 missing episodes (S08E26-E29, series finale arc)
+  - Sourced working magnet links with active seeds:
+    - S08E26: 2 seeds
+    - S08E27: 3 seeds
+    - S08E28: 5 seeds
+    - S08E29: 6 seeds
+
+### Credentials Saved to Memory
+- qBittorrent: admin / MediaServer2024!
+- Sonarr API Key: 152f02f5f82b40c084f02a102a4041e4
+- Radarr API Key: f22c6b659bdb4a0a8628f199ca5b9b4d
+
+### Commits Made
+- itsjesse.dev: "DevScout: LinkedIn comment engagement system" (8ef3382)
+  - ~1500 lines added for comment queue management system
+
+### Repository Status
+- All repos clean and pushed
+
+### Pending
+- [ ] Monitor Regular Show downloads to completion
+
+### Notes
+- Router (192.168.99.1) blocked most edgeserv.ru connection attempts
+- Cracked software from FTUApps bundled ScreenConnect backdoor
+- Always verify cracked software or avoid entirely
+
+---
+
 ## Session: 2025-12-31 (Evening - SSH & Machine Access Setup)
 
 ### Accomplished
