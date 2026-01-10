@@ -1016,3 +1016,47 @@ cd ~/projects/cakebuddy/app && npx react-native start --host 0.0.0.0
 - All .local domains point to 192.168.99.83 via hosts file
 - Plex needs websockets enabled to work through reverse proxy
 - SSL for local network deemed not worth the complexity
+
+### Session: 2026-01-10 (Early AM)
+
+**Accomplishments:**
+- Completed PromptBase business-plan-generator with 4 full example outputs
+- Deployed SnapURL API to VPS (port 8005, snapurl-api.junipr.io)
+- Synced Claude configs between DESKTOP and dev-lab
+- Removed 8 MCPs from dev-lab (thinking, memory, github, etc.) to match DESKTOP
+- Copied codex agent to dev-lab
+- Removed Mixedbread-Grep plugin from dev-lab
+- Copied cyber-academy from VPS to ~/projects/cyber-academy
+- Moved Tonegeist to ~/projects/tonegeist
+
+**Commits Made:**
+- income-factory: "Add 4 full example outputs to business-plan-generator"
+- income-factory: "Add example inputs to PromptBase listing, deploy SnapURL API"
+
+**Income Factory Status:**
+- /create-etsy, /create-promptbase, /create-rapidapi, /variate skills complete
+- PromptBase listing format finalized with:
+  - 40 char title limit, 500 char description limit
+  - Claude version, max tokens, temperature settings
+  - Test prompt (all variables filled in)
+  - 4 example inputs + 4 full example outputs
+- SnapURL API deployed and accessible
+
+**Projects Now on dev-lab:**
+- ~/projects/cyber-academy (from VPS)
+- ~/projects/tonegeist (moved from ~/Tonegeist)
+- ~/projects/income-factory
+
+**Claude Config Sync:**
+- DESKTOP and dev-lab now match
+- 14 commands, 8 skills, 1 agent (codex), 1 plugin
+- No MCPs on either machine
+
+**Pending:**
+- cyber-academy: Run npm install when working on it
+- SnapURL API: Test screenshot endpoint, may need Playwright deps
+- Cloudflare may block some IPs accessing snapurl-api.junipr.io
+
+**Notes:**
+- VPS uses Caddy for reverse proxy (not nginx)
+- API port assignments: 8001=study-buddy, 8002=dealscout, 8005=snapurl-api
