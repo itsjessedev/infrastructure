@@ -1060,3 +1060,48 @@ cd ~/projects/cakebuddy/app && npx react-native start --host 0.0.0.0
 **Notes:**
 - VPS uses Caddy for reverse proxy (not nginx)
 - API port assignments: 8001=study-buddy, 8002=dealscout, 8005=snapurl-api
+
+---
+
+### Session: 2026-01-11 (Late Night)
+
+**Accomplishments:**
+- Deep dive into Breath of Fire 3 ROM extraction and EMI file format reverse engineering
+- Created and tested multiple extraction tools:
+  - `emi_dump.py` - EMI container section extractor
+  - `capcom_lzss.py` - LZSS decompression for Capcom graphics data
+  - `tim_extractor.py` - TIM texture finder/extractor
+- Successfully decompressed EMI graphics sections (292KB → 360KB)
+- Analyzed 0x00b80380 signature - identified as PS1 VRAM coordinate encoding
+- Ran jPSXdec extraction (924 items found, mostly small palettes)
+- Multiple render attempts (4-bit, 8-bit, 16-bit at various widths) - format still undocumented
+- Research agent found EMI is proprietary Capcom format with no public documentation
+
+**Repository Created:**
+- breath-of-fire-3: https://github.com/itsjessedev/breath-of-fire-3 (private)
+  - Initial commit with all tools and documentation
+
+**Commits Made:**
+- homelab: "End of day: Updated agent documentation" (84bf811)
+- breath-of-fire-3: "Initial commit: BoF3 HD Remaster project setup" (e0d866b)
+
+**Key Findings:**
+- EMI container format: MATH_TBL header, TOC at 0x10 intervals, 2048-byte aligned sections
+- Graphics sections use LZSS compression (signature 0x00b80380)
+- Decompressed data structure unknown - likely GPU display list format, not raw pixels
+- Spriters Resource has existing character sprites that can be used as foundation
+
+**Pending Tasks:**
+- [ ] Continue EMI format reverse engineering (or use existing sprites)
+- [ ] Start game engine development with available assets
+- [ ] HD upscale sprites using ComfyUI/IP-Adapter workflow
+
+**Next Steps:**
+1. Decide: continue format cracking vs use Spriters Resource sprites
+2. Begin Godot/Python game engine with available assets
+3. Test HD generation workflow with IP-Adapter
+
+**Notes:**
+- User explicitly rejected VRAM dumping suggestion
+- EMI graphics format may require significant reverse engineering effort
+- Available sprites from Spriters Resource: Ryu, Nina, Rei, Teepo, Momo, Peco, Garr, Ryu Kaiser
