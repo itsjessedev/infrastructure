@@ -40,6 +40,39 @@ This file tracks cross-project work and general development sessions.
 
 ## Session Log
 
+### Session: 2026-01-12 (Lead Prospector)
+**Accomplishments:**
+- Built complete Lead Prospector tool for finding local businesses needing AI/automation
+- Created GUI application with tkinter (city/county selectors, category selectors, progress bar, results table)
+- Integrated Google Places API for business discovery
+- Built website scraper for emails, social links, booking status, pain points
+- Integrated Gemini AI (via Google AI API) for analyzing business opportunities
+- Set up API rotation: OpenRouter primary, Google AI fallback
+- Connected Google Sheets export with service account
+- Created private repo: github.com/itsjessedev/lead-prospector
+- Project location: /home/jesse/itsjesse.dev/lead-prospector/
+
+**Commits Made:**
+- Initial scaffolding with scraper modules
+- Main GUI application with tkinter
+- API rotation for OpenRouter/Google AI fallback
+- Bug fixes for hanging and NoneType errors
+
+**Testing:**
+- Google Places API: Working (found 20 plumbers in Cookeville)
+- Gemini AI analysis: Working (generating pain points and suggested approaches)
+- Google Sheets: Connected and working
+- GUI: Runs on Windows but had some hanging issues (fixed with timeouts)
+
+**Pending:**
+- User testing GUI on Windows with latest fixes
+- Package as Windows EXE with PyInstaller
+
+**Next Steps:**
+1. User to test latest version with `git pull && python lead_prospector.py`
+2. If working, build EXE: `pyinstaller --onefile --windowed --name "Lead Prospector" lead_prospector.py`
+3. Start prospecting local businesses in Upper Cumberland TN
+
 ### Session: 2026-01-02 17:30
 **Accomplishments:**
 - Set up Claude Code on LAPTOP to match DESKTOP configuration
