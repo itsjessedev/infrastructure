@@ -1138,3 +1138,27 @@ cd ~/projects/cakebuddy/app && npx react-native start --host 0.0.0.0
 - User explicitly rejected VRAM dumping suggestion
 - EMI graphics format may require significant reverse engineering effort
 - Available sprites from Spriters Resource: Ryu, Nina, Rei, Teepo, Momo, Peco, Garr, Ryu Kaiser
+
+### Session: 2026-01-13 02:48 CST
+**Accomplishments:**
+- Mirrored Claude settings/commands/skills/plugins/project instructions into Codex-only mirrors under `/home/jesse/.codex/`
+- Added normalized Codex global rules file at `/home/jesse/.codex/GLOBAL-RULES.md`
+- Added one-way sync script `/home/jesse/.codex/sync-from-claude.sh` (never writes to `.claude`)
+- Created nightly sync daemon scripts and container entrypoint wrapper for Docker container scheduling
+- Started sync daemon manually (runs nightly at 02:30 while container stays up)
+- Added `.bashrc` hook to start sync daemon on shell start
+
+**Commits Made:**
+- None
+
+**Pending Tasks:**
+- [ ] Update Unraid container entrypoint to `/home/jesse/.codex/container-entrypoint.sh` for reboot-safe nightly sync
+- [ ] Consider enabling cron/systemd if available in future container setup
+
+**Next Steps:**
+1. Update container entrypoint on Unraid to auto-start nightly sync after reboot
+2. Remove `.bashrc` hook if entrypoint handles daemon start
+
+**Notes:**
+- Container lacks cron/systemd; PID 1 is `sshd`
+- User requested reminders in future sessions to enable proper scheduler
