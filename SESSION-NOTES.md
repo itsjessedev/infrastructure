@@ -40,6 +40,93 @@ This file tracks cross-project work and general development sessions.
 
 ## Session Log
 
+### Session: 2026-01-17 (Junipr - Marketing + CRM Scheduling System)
+**Accomplishments:**
+- Complete availability-based scheduling system:
+  - CRM Backend: WeeklyAvailability, DateOverride, Appointment models
+  - Public availability endpoints: GET /api/public/availability/slots, POST /api/public/availability/book
+  - CRM Settings page with availability management UI (weekly slots, date overrides, toggles)
+
+- Marketing site /schedule page overhaul:
+  - Real-time slot picker showing available dates from CRM API
+  - Interactive time slot selection with visual feedback
+  - Falls back to preference form when no availability configured
+  - Animated UI with confetti on successful booking
+
+- Homepage section enhancements ("Holy Shit" backgrounds):
+  - Problem section: Vibrant coral/orange gradient mesh animations
+  - Stats section: Animated glow rings, counting effects
+  - All sections enhanced with floating orbs, particles, gradient effects
+
+- Various UI fixes:
+  - Header: Dark glass effect (slate-900/85) with cyan border
+  - Button text colors: Fixed CSS specificity with global link styles
+  - Scroll indicator: Changed to vh units for zoom-aware positioning
+
+**Commits Made:**
+- junipr: Add real-time slot booking to schedule page (5d8cd49)
+- junipr: Add availability settings UI to CRM Settings page (f827d53)
+- junipr: Add public availability endpoints for marketing site scheduling (dfc0fb5)
+- junipr: Fix scroll indicator for zoomed browsers using vh units (52dc579)
+
+**Pending Tasks:**
+- [ ] Fix scroll indicator fade delay (disappears too quickly when scrolling)
+- [ ] Add more work projects from itsjesse.dev (3-4 additional case studies)
+
+**Next Steps:**
+1. Set availability in CRM Settings for Jesse's schedule
+2. Test complete booking flow: schedule page → slot selection → booking confirmation
+3. Continue with remaining todo items when session resumes
+
+**Notes:**
+- Availability API returns empty when no weekly slots configured - expected behavior
+- Schedule page shows preference form as fallback when no slots available
+- CRM dark theme completed in previous session, matches marketing site brand
+
+### Session: 2026-01-16 (Junipr CRM - LinkedIn + Scraper Complete)
+**Accomplishments:**
+- Complete LinkedIn Tracking feature with full DevScout parity:
+  - Database models: LinkedInMyComment, LinkedInCommentReply, LinkedInMyPost, LinkedInPostComment, LinkedInEngagement, LinkedInAuth
+  - AI response generator with 17 comment styles, 10 post opening styles
+  - Full router with notifications, comment/reply tracking, AI generation endpoints
+  - Apify integration for LinkedIn data fetching (multi-key rotation)
+  - Frontend: Three-tab UI (Content | My Comments | My Posts) with notification badges
+
+- Complete Lead Prospector Scraper integration:
+  - 77 cities with precise coordinates and search radius
+  - 107 business categories (alphabetized)
+  - Full scraping pipeline: Google Places API → Website scraping → Review scraping → AI analysis
+  - 19 foot-in-door service recommendations
+  - Results stored as JSON, preview before import, duplicate detection
+  - Creates Lead + LeadEnrichment + Review records on import
+
+**Commits Made:**
+- 4dbc7bb: Complete LinkedIn tracking + full Lead Prospector scraper integration
+- 040593b: Fix async_session import in scraper router
+
+**Deployed:**
+- Backend synced to VPS via rsync
+- Frontend rebuilt on VPS
+- Service healthy at crm.junipr.io
+
+**TODO for Tomorrow (2026-01-17):**
+1. Install gspread on VPS: `pip install gspread google-auth`
+2. Remove dummy notifications from frontend
+3. Fix "Mark all as read" functionality
+4. Fix /guide page (404 or not rendering)
+5. Fix LinkedIn API URL issue (frontend calls localhost:8010 instead of production)
+   - Root cause: VITE_API_URL not set during VPS build
+6. Fix Scraper not showing cities/categories
+7. Make dashboard cards link to their pages
+8. Add useful info to dashboard
+9. Design professional brand palette
+10. Retheme CRM and junipr.io
+
+**Technical Notes:**
+- VPS uses rsync deployment (not git clone)
+- Paths: Backend `/home/deploy/junipr-crm/backend/`, Frontend `/home/deploy/junipr-crm/frontend/dist/`
+- Frontend API URL issue: `client.ts` uses `VITE_API_URL || 'http://localhost:8010'`
+
 ### Session: 2026-01-12 (Lead Prospector)
 **Accomplishments:**
 - Built complete Lead Prospector tool for finding local businesses needing AI/automation
