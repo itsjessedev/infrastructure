@@ -13,6 +13,7 @@ SESSION_DIR="$HOME/.claude/projects"
 
 # Per-wrapper-instance files (using PID for isolation between terminals)
 WRAPPER_PID=$$
+export CLAUDE_WRAPPER_PID=$$  # Export for statusline and hooks to identify this session
 RESTART_FILE="$HOME/.claude/.restart-session-${WRAPPER_PID}"
 KILLED_BY_MONITOR="$HOME/.claude/.killed-by-monitor-${WRAPPER_PID}"
 CURRENT_SESSION_FILE="$HOME/.claude/.current-session-${WRAPPER_PID}"
@@ -54,69 +55,98 @@ echo $$ > "$WRAPPER_PID_FILE"
 MONITOR_PID=""
 CURRENT_SESSION_UUID=""
 
+TITLE_UPDATER_PID=""
+
 cleanup() {
+    # Restore terminal title
+    printf '\033]0;%s\007' "$USER@$(hostname)"
     rm -f "$WRAPPER_PID_FILE"
     rm -f "$CURRENT_SESSION_FILE"
     rm -f "$RESTART_FILE" "$RESTART_FILE.dir"
     rm -f "$KILLED_BY_MONITOR"
     [ -n "$MONITOR_PID" ] && kill $MONITOR_PID 2>/dev/null
+    [ -n "$TITLE_UPDATER_PID" ] && kill $TITLE_UPDATER_PID 2>/dev/null
+}
+
+# Update terminal title with current context percentage
+# Runs in background, reads transcript directly (same source as statusline)
+start_title_updater() {
+    local my_pid=$$
+    (
+        while kill -0 "$my_pid" 2>/dev/null; do
+            sleep 2
+
+            # Read directly from transcript (same as statusline for consistency)
+            local session_file="$HOME/.claude/.current-session-${my_pid}"
+            if [ -f "$session_file" ]; then
+                local transcript=$(cut -d: -f2 "$session_file" 2>/dev/null)
+                if [ -f "$transcript" ]; then
+                    local tokens=$(strings "$transcript" 2>/dev/null | \
+                        grep "cache_read_input_tokens" | \
+                        tail -1 | \
+                        grep -oE '"cache_read_input_tokens":[0-9]+' | \
+                        cut -d: -f2)
+
+                    if [ -n "$tokens" ] && [ "$tokens" -gt 0 ]; then
+                        local percent=$((tokens * 100 / 200000))
+                        if [ "$percent" -ge 96 ]; then
+                            printf '\033]0;Claude [%d%% CRIT]\007' "$percent"
+                        elif [ "$percent" -ge 90 ]; then
+                            printf '\033]0;Claude [%d%% WARN]\007' "$percent"
+                        else
+                            printf '\033]0;Claude [%d%%]\007' "$percent"
+                        fi
+                    else
+                        printf '\033]0;Claude [0%%]\007'
+                    fi
+                else
+                    printf '\033]0;Claude [stale]\007'
+                fi
+            else
+                printf '\033]0;Claude [starting...]\007'
+            fi
+        done
+    ) &
+    TITLE_UPDATER_PID=$!
 }
 trap cleanup EXIT
 
 # Function to track active session
 # Waits for Claude to create a transcript, then writes session info
-# Strategy: First try to find NEW transcripts (created after start), then fall back to recent ones
+# Continuously monitors and updates - doesn't give up
 track_session() {
     local wrapper_pid=$$
     local start_time=$ITERATION_START
     (
-        # Phase 1: Look for NEW transcripts (created after wrapper start) - 5 seconds
-        for i in {1..20}; do
-            sleep 0.25
+        local found=false
+        local last_transcript=""
 
-            # Safety: Exit if wrapper is gone
-            if ! kill -0 "$wrapper_pid" 2>/dev/null; then
-                exit 0
-            fi
+        # Keep running until wrapper dies - continuously track the active transcript
+        while kill -0 "$wrapper_pid" 2>/dev/null; do
+            sleep 1
 
-            # Find transcripts modified AFTER this wrapper started
-            NEWEST=$(find "$SESSION_DIR" -maxdepth 2 -name "*.jsonl" -newermt "@$start_time" -type f 2>/dev/null | \
-                grep -v "/subagents/" | \
-                xargs -r ls -t 2>/dev/null | \
-                head -1)
+            # Find the most recently modified transcript in our project directory
+            # Use pwd-based path like the statusline does
+            local project_path=$(pwd | sed 's|/|-|g')
+            local project_dir="$SESSION_DIR/$project_path"
 
-            if [ -n "$NEWEST" ] && [ -f "$NEWEST" ]; then
-                SESSION_UUID=$(basename "$NEWEST" .jsonl)
-                echo "${SESSION_UUID}:${NEWEST}:${wrapper_pid}" > "$CURRENT_SESSION_FILE"
-                log "Tracking session: $SESSION_UUID (wrapper: $wrapper_pid)"
-                exit 0
-            fi
-        done
-
-        # Phase 2: Fallback - find most recently modified transcript (last 60 sec)
-        # This handles resumed sessions where transcript existed before wrapper started
-        log "No new transcript found, trying fallback..."
-        for i in {1..20}; do
-            sleep 0.25
-
-            if ! kill -0 "$wrapper_pid" 2>/dev/null; then
-                exit 0
-            fi
-
-            NEWEST=$(find "$SESSION_DIR" -maxdepth 2 -name "*.jsonl" -mmin -1 -type f 2>/dev/null | \
-                grep -v "/subagents/" | \
-                xargs -r ls -t 2>/dev/null | \
-                head -1)
+            NEWEST=$(ls -t "$project_dir"/*.jsonl 2>/dev/null | grep -v "/subagents/" | head -1)
 
             if [ -n "$NEWEST" ] && [ -f "$NEWEST" ]; then
-                SESSION_UUID=$(basename "$NEWEST" .jsonl)
-                echo "${SESSION_UUID}:${NEWEST}:${wrapper_pid}" > "$CURRENT_SESSION_FILE"
-                log "Tracking session (fallback): $SESSION_UUID (wrapper: $wrapper_pid)"
-                exit 0
+                # Only update if transcript changed
+                if [ "$NEWEST" != "$last_transcript" ]; then
+                    SESSION_UUID=$(basename "$NEWEST" .jsonl)
+                    echo "${SESSION_UUID}:${NEWEST}:${wrapper_pid}" > "$CURRENT_SESSION_FILE"
+                    if [ "$found" = false ]; then
+                        log "Tracking session: $SESSION_UUID (wrapper: $wrapper_pid)"
+                        found=true
+                    else
+                        log "Session changed: $SESSION_UUID (wrapper: $wrapper_pid)"
+                    fi
+                    last_transcript="$NEWEST"
+                fi
             fi
         done
-
-        log "Warning: Could not find transcript to track"
     ) &
 }
 
@@ -145,27 +175,20 @@ start_monitor() {
                 exit 0
             fi
 
-            # Check both PID-specific and global (fallback) restart signals
-            GLOBAL_RESTART_FILE="$HOME/.claude/.restart-session"
-            ACTIVE_RESTART_FILE=""
+            # Only check PID-specific restart signal (not global - prevents cross-session interference)
+            # Global signal is legacy and can cause issues when multiple sessions exist
             if [ -f "$RESTART_FILE" ]; then
-                ACTIVE_RESTART_FILE="$RESTART_FILE"
-            elif [ -f "$GLOBAL_RESTART_FILE" ]; then
-                ACTIVE_RESTART_FILE="$GLOBAL_RESTART_FILE"
-            fi
-
-            if [ -n "$ACTIVE_RESTART_FILE" ]; then
-                # Read restart signal (format: SESSION_ID:WORKING_DIR)
-                SIGNAL_CONTENT=$(cat "$ACTIVE_RESTART_FILE" 2>/dev/null)
+                # Read restart signal (format: SESSION_ID:WORKING_DIR:HANDOFF_ID)
+                SIGNAL_CONTENT=$(cat "$RESTART_FILE" 2>/dev/null)
                 SIGNAL_SESSION=$(echo "$SIGNAL_CONTENT" | cut -d: -f1)
-                SIGNAL_DIR=$(echo "$SIGNAL_CONTENT" | cut -d: -f2-)
+                SIGNAL_DIR=$(echo "$SIGNAL_CONTENT" | cut -d: -f2)
 
                 # Verify session ID if we have one tracked
                 if [ -f "$CURRENT_SESSION_FILE" ]; then
                     TRACKED_SESSION=$(cut -d: -f1 "$CURRENT_SESSION_FILE" 2>/dev/null)
                     if [ -n "$SIGNAL_SESSION" ] && [ -n "$TRACKED_SESSION" ] && [ "$SIGNAL_SESSION" != "$TRACKED_SESSION" ]; then
                         log "Monitor: Session mismatch - signal:$SIGNAL_SESSION tracked:$TRACKED_SESSION - ignoring"
-                        rm -f "$ACTIVE_RESTART_FILE"
+                        rm -f "$RESTART_FILE"
                         continue
                     fi
                 fi
@@ -227,6 +250,9 @@ while true; do
 
     # Start session tracker (background - will write session file when transcript appears)
     track_session
+
+    # Start terminal title updater (shows context % in terminal title)
+    start_title_updater
 
     # Run Claude
     if [ $RESTART_COUNT -eq 0 ]; then
