@@ -121,21 +121,29 @@ Unlike auto-compact which loses detail, this system:
 
 ```
 ~/.claude/
-├── .context-status          # Written by hook: "CRITICAL:4.2MB"
-├── .restart-session         # Written by Claude: contains $PWD
-├── .killed-by-monitor       # Written by monitor: signals intentional kill
-├── .wrapper-pid             # Written by wrapper: its PID
-├── .load-handoff            # Written by wrapper: tells hook to load
-├── .test-mode               # Optional: enables low thresholds
+├── .context-status-{PID}    # Per-wrapper status: "CRITICAL:192000tok (96%)"
+├── .current-session-{PID}   # Per-wrapper: session_id:transcript_path:wrapper_pid
+├── .restart-session-{PID}   # Per-wrapper restart signal: session_id:dir:handoff_id
+├── .killed-by-monitor-{PID} # Per-wrapper: signals intentional kill
+├── .critical-triggered-{ID} # Per-session: prevents duplicate handoffs
+├── .wrapper-pid             # Legacy: current wrapper PID
+├── .test-mode               # Optional: enables low thresholds (5%)
+├── .last-handoff-id         # Written by handoff: ID for restart signal
 ├── auto-session.log         # Wrapper logging
 ├── handoff/
-│   ├── {channel}-{pid}.md   # Handoff files (one per session)
-│   └── {channel}.lock       # Lock files for parallel session detection
+│   ├── {channel}-CURRENT.md # Active handoff file
+│   ├── {channel}.manifest.json  # Handoff tracking (active/consumed)
+│   ├── {channel}.lock.d/    # Lock directory for parallel sessions
+│   └── archive/             # Consumed handoffs
 ├── hooks/
 │   ├── context-monitor.sh   # PostToolUse hook
 │   ├── session-start-from-handoff.sh  # SessionStart hook
+│   ├── pre-compact-handoff.sh  # Creates handoff at CRITICAL
+│   ├── zombie-killer.sh     # Cleanup hook
+│   ├── archive-manager.sh   # Transcript archival
 │   └── lib/
-│       └── get-channel.sh   # Channel detection utility
+│       ├── get-channel.sh   # Channel detection utility
+│       └── handoff-manifest.sh  # Manifest system functions
 ├── channel-registry.json    # Directory → channel mapping
 └── settings.json            # Hook configuration
 
