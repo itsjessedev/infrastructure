@@ -17,12 +17,33 @@ export CLAUDE_WRAPPER_PID=$$  # Export for statusline and hooks to identify this
 RESTART_FILE="$HOME/.claude/.restart-session-${WRAPPER_PID}"
 KILLED_BY_MONITOR="$HOME/.claude/.killed-by-monitor-${WRAPPER_PID}"
 CURRENT_SESSION_FILE="$HOME/.claude/.current-session-${WRAPPER_PID}"
+WALL_DETECTED_FILE="$HOME/.claude/.wall-detected-${WRAPPER_PID}"
+
+# Iteration tracking - changes each loop, subprocesses check this to know when to exit
+ITERATION_FILE="$HOME/.claude/.iteration-${WRAPPER_PID}"
+ITERATION_ID=0
 
 # Legacy global file (still used for quick lookup by hooks)
 WRAPPER_PID_FILE="$HOME/.claude/.wrapper-pid"
 
 # Handoff ID from restart signal (ensures exact handoff is loaded)
 FORCED_HANDOFF_ID=""
+
+# Function to kill ALL background subprocesses from previous iterations
+kill_iteration_subprocesses() {
+    # Kill any subprocesses that were spawned by this wrapper
+    # This catches verify_session, title_updater, monitor from previous iterations
+    local children=$(pgrep -P $$ 2>/dev/null)
+    for cpid in $children; do
+        # Don't kill ourselves or the currently running Claude
+        local cmd=$(ps -p "$cpid" -o comm= 2>/dev/null)
+        [[ "$cmd" == "claude" ]] && continue
+        [[ "$cmd" == "python3" ]] && continue  # pty-wrapper
+        # Kill the subprocess and all its children
+        pkill -P "$cpid" 2>/dev/null
+        kill "$cpid" 2>/dev/null
+    done
+}
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
@@ -40,6 +61,22 @@ CLAUDE_BIN=$(find_claude)
 
 CLAUDE_DEFAULT_FLAGS="--dangerously-skip-permissions"
 
+# PTY Wrapper for exit safety - intercepts Ctrl+C/D, /exit, /clear
+PTY_WRAPPER="$HOME/.claude/bin/pty-wrapper.py"
+
+# Function to launch Claude (through PTY wrapper if available)
+launch_claude() {
+    if [ -x "$PTY_WRAPPER" ] && [ -t 0 ]; then
+        # Use PTY wrapper for interactive sessions
+        log "Launching via PTY wrapper"
+        python3 "$PTY_WRAPPER" "$@"
+    else
+        # Direct launch (non-interactive or PTY wrapper unavailable)
+        log "Launching directly (no PTY wrapper)"
+        "$@"
+    fi
+}
+
 # Load shared libraries
 source "$HOME/.claude/hooks/lib/get-channel.sh" 2>/dev/null || true
 source "$HOME/.claude/hooks/lib/handoff-manifest.sh" 2>/dev/null || true
@@ -56,6 +93,7 @@ MONITOR_PID=""
 CURRENT_SESSION_UUID=""
 
 TITLE_UPDATER_PID=""
+VERIFY_PID=""
 
 cleanup() {
     # Restore terminal title
@@ -64,31 +102,83 @@ cleanup() {
     rm -f "$CURRENT_SESSION_FILE"
     rm -f "$RESTART_FILE" "$RESTART_FILE.dir"
     rm -f "$KILLED_BY_MONITOR"
-    [ -n "$MONITOR_PID" ] && kill $MONITOR_PID 2>/dev/null
-    [ -n "$TITLE_UPDATER_PID" ] && kill $TITLE_UPDATER_PID 2>/dev/null
+    rm -f "$ITERATION_FILE"
+    rm -f "$WALL_DETECTED_FILE"
+    # Kill all background subprocesses
+    kill_iteration_subprocesses
+}
+
+# Create handoff from current session (called by wrapper when wall detected)
+# This runs AFTER Claude exits, so no hook timeout pressure
+create_wall_handoff() {
+    local channel="$1"
+    local session_id="$2"
+    local transcript="$3"
+
+    log "Creating wall handoff for channel=$channel session=$session_id"
+
+    # Source the libraries
+    source "$HOME/.claude/hooks/lib/handoff-manifest.sh" 2>/dev/null || return 1
+    source "$HOME/.claude/hooks/lib/extract-session-state.sh" 2>/dev/null || return 1
+
+    # Check if handoff already exists
+    if has_active_handoff "$channel"; then
+        local existing_id=$(get_active_handoff_id "$channel")
+        log "Handoff already exists: $existing_id"
+        echo "$existing_id"
+        return 0
+    fi
+
+    # Build and create handoff
+    local content=$(build_handoff_content "$session_id" "$transcript" "$channel" "wall-hit" "100%")
+    local handoff_id=$(create_handoff "$channel" "$content" "wall-hit")
+
+    if [ -n "$handoff_id" ]; then
+        log "Wall handoff created: $handoff_id"
+        echo "$handoff_id"
+        return 0
+    else
+        log "Failed to create wall handoff"
+        return 1
+    fi
 }
 
 # Update terminal title with current context percentage
-# Runs in background, reads transcript directly (same source as statusline)
+# Runs in background, reads from session file (deterministic)
+# SIMPLIFIED: No more resume mode transcript scanning - that caused cross-session bugs
 start_title_updater() {
-    local my_pid=$$
+    local my_iteration="$ITERATION_ID"
+    local iteration_file="$ITERATION_FILE"
+    local expected_transcript="$EXPECTED_TRANSCRIPT"
+    local session_file="$CURRENT_SESSION_FILE"
     (
-        while kill -0 "$my_pid" 2>/dev/null; do
+        local last_percent=-1
+        while true; do
             sleep 2
 
-            # Read directly from transcript (same as statusline for consistency)
-            local session_file="$HOME/.claude/.current-session-${my_pid}"
-            if [ -f "$session_file" ]; then
-                local transcript=$(cut -d: -f2 "$session_file" 2>/dev/null)
-                if [ -f "$transcript" ]; then
-                    local tokens=$(strings "$transcript" 2>/dev/null | \
-                        grep "cache_read_input_tokens" | \
-                        tail -1 | \
-                        grep -oE '"cache_read_input_tokens":[0-9]+' | \
-                        cut -d: -f2)
+            # Exit if iteration has changed (wrapper looped/restarted)
+            local current_iteration=$(cat "$iteration_file" 2>/dev/null)
+            [ "$current_iteration" != "$my_iteration" ] && exit 0
 
-                    if [ -n "$tokens" ] && [ "$tokens" -gt 0 ]; then
-                        local percent=$((tokens * 100 / 200000))
+            # Read transcript from session file (may be updated by resume mode)
+            local transcript=""
+            if [ -f "$session_file" ]; then
+                transcript=$(cut -d: -f2 "$session_file" 2>/dev/null)
+            fi
+            [ -z "$transcript" ] && transcript="$expected_transcript"
+
+            if [ -n "$transcript" ] && [ -f "$transcript" ]; then
+                local tokens=$(strings "$transcript" 2>/dev/null | \
+                    grep "cache_read_input_tokens" | \
+                    tail -1 | \
+                    grep -oE '"cache_read_input_tokens":[0-9]+' | \
+                    cut -d: -f2)
+
+                if [ -n "$tokens" ] && [ "$tokens" -gt 0 ]; then
+                    local percent=$((tokens * 100 / 200000))
+                    # Only update if changed (reduces flicker)
+                    if [ "$percent" != "$last_percent" ]; then
+                        last_percent=$percent
                         if [ "$percent" -ge 96 ]; then
                             printf '\033]0;Claude [%d%% CRIT]\007' "$percent"
                         elif [ "$percent" -ge 90 ]; then
@@ -96,14 +186,12 @@ start_title_updater() {
                         else
                             printf '\033]0;Claude [%d%%]\007' "$percent"
                         fi
-                    else
-                        printf '\033]0;Claude [0%%]\007'
                     fi
                 else
-                    printf '\033]0;Claude [stale]\007'
+                    printf '\033]0;Claude [0%%]\007'
                 fi
             else
-                printf '\033]0;Claude [starting...]\007'
+                printf '\033]0;Claude [0%%]\007'
             fi
         done
     ) &
@@ -111,101 +199,112 @@ start_title_updater() {
 }
 trap cleanup EXIT
 
-# Function to track active session
-# Waits for Claude to create a transcript, then writes session info
-# Continuously monitors and updates - doesn't give up
-track_session() {
+# Function to track active session in RESUME MODE ONLY
+# In normal mode: NOT CALLED - session is predetermined
+# In resume mode: detects which session the user picked (ONE TIME, not continuous)
+verify_session_resume() {
+    local my_iteration="$ITERATION_ID"
+    local iteration_file="$ITERATION_FILE"
     local wrapper_pid=$$
-    local start_time=$ITERATION_START
+    local session_file="$CURRENT_SESSION_FILE"
+    local project_dir="$1"  # MUST pass specific project dir to avoid global scanning
     (
-        local found=false
-        local last_transcript=""
+        log "verify_session_resume started for wrapper $wrapper_pid, iteration $my_iteration, project=$project_dir"
 
-        # Keep running until wrapper dies - continuously track the active transcript
-        while kill -0 "$wrapper_pid" 2>/dev/null; do
-            sleep 1
+        local detected=false
+        local attempts=0
+        local max_attempts=30  # Wait up to 60 seconds for user to pick
 
-            # Find the most recently modified transcript in our project directory
-            # Use pwd-based path like the statusline does
-            local project_path=$(pwd | sed 's|/|-|g')
-            local project_dir="$SESSION_DIR/$project_path"
+        while [ "$detected" = false ] && [ $attempts -lt $max_attempts ]; do
+            sleep 2
+            attempts=$((attempts + 1))
 
-            NEWEST=$(ls -t "$project_dir"/*.jsonl 2>/dev/null | grep -v "/subagents/" | head -1)
+            # Exit if iteration has changed (wrapper looped/restarted)
+            local current_iteration=$(cat "$iteration_file" 2>/dev/null)
+            [ "$current_iteration" != "$my_iteration" ] && exit 0
 
-            if [ -n "$NEWEST" ] && [ -f "$NEWEST" ]; then
-                # Only update if transcript changed
-                if [ "$NEWEST" != "$last_transcript" ]; then
-                    SESSION_UUID=$(basename "$NEWEST" .jsonl)
-                    echo "${SESSION_UUID}:${NEWEST}:${wrapper_pid}" > "$CURRENT_SESSION_FILE"
-                    if [ "$found" = false ]; then
-                        log "Tracking session: $SESSION_UUID (wrapper: $wrapper_pid)"
-                        found=true
-                    else
-                        log "Session changed: $SESSION_UUID (wrapper: $wrapper_pid)"
-                    fi
-                    last_transcript="$NEWEST"
+            # CRITICAL FIX: Only scan transcripts in THIS specific project directory
+            # NOT the global SESSION_DIR - that was the bug!
+            if [ -n "$project_dir" ] && [ -d "$project_dir" ]; then
+                # Find transcripts modified in last 30 seconds IN THIS PROJECT ONLY
+                local active_transcript=$(find "$project_dir" -maxdepth 1 -name "*.jsonl" -mmin -0.5 2>/dev/null | head -1)
+                if [ -n "$active_transcript" ] && [ -f "$active_transcript" ]; then
+                    # Extract session ID from transcript filename
+                    local detected_session=$(basename "$active_transcript" .jsonl)
+                    # Update session file with detected info
+                    echo "${detected_session}:${active_transcript}:${wrapper_pid}" > "$session_file"
+                    log "Resume mode: detected session $detected_session in $project_dir"
+                    detected=true
                 fi
             fi
         done
+
+        if [ "$detected" = false ]; then
+            log "Resume mode: no session detected after $max_attempts attempts"
+        fi
     ) &
+    VERIFY_PID=$!
 }
 
 # Function to start monitor subprocess
 start_monitor() {
-    local MY_WRAPPER_PID=$$  # Capture THIS wrapper's PID
-
-    # Kill any existing monitor
-    [ -n "$MONITOR_PID" ] && kill $MONITOR_PID 2>/dev/null
+    local MY_WRAPPER_PID=$$
+    local my_iteration="$ITERATION_ID"
+    local iteration_file="$ITERATION_FILE"
+    local restart_file="$RESTART_FILE"
+    local killed_file="$KILLED_BY_MONITOR"
+    local session_file="$CURRENT_SESSION_FILE"
+    local pid_file="$WRAPPER_PID_FILE"
 
     (
         while true; do
             sleep 0.25
 
-            # Safety: Exit if our wrapper is dead (prevents stale monitors)
+            # Exit if iteration has changed (wrapper looped/restarted)
+            local current_iteration=$(cat "$iteration_file" 2>/dev/null)
+            [ "$current_iteration" != "$my_iteration" ] && exit 0
+
+            # Safety: Exit if our wrapper is dead
             if ! kill -0 "$MY_WRAPPER_PID" 2>/dev/null; then
                 exit 0
             fi
 
-            [ ! -f "$WRAPPER_PID_FILE" ] && exit 0
+            [ ! -f "$pid_file" ] && exit 0
 
             # Safety: Only act if WE are still the current wrapper
-            CURRENT_WRAPPER=$(cat "$WRAPPER_PID_FILE" 2>/dev/null)
-            if [ "$CURRENT_WRAPPER" != "$MY_WRAPPER_PID" ]; then
-                # Another wrapper took over - we're stale, exit silently
+            local current_wrapper=$(cat "$pid_file" 2>/dev/null)
+            if [ "$current_wrapper" != "$MY_WRAPPER_PID" ]; then
                 exit 0
             fi
 
-            # Only check PID-specific restart signal (not global - prevents cross-session interference)
-            # Global signal is legacy and can cause issues when multiple sessions exist
-            if [ -f "$RESTART_FILE" ]; then
+            # Only check PID-specific restart signal
+            if [ -f "$restart_file" ]; then
                 # Read restart signal (format: SESSION_ID:WORKING_DIR:HANDOFF_ID)
-                SIGNAL_CONTENT=$(cat "$RESTART_FILE" 2>/dev/null)
-                SIGNAL_SESSION=$(echo "$SIGNAL_CONTENT" | cut -d: -f1)
-                SIGNAL_DIR=$(echo "$SIGNAL_CONTENT" | cut -d: -f2)
+                local signal_content=$(cat "$restart_file" 2>/dev/null)
+                local signal_session=$(echo "$signal_content" | cut -d: -f1)
+                local signal_dir=$(echo "$signal_content" | cut -d: -f2)
 
                 # Verify session ID if we have one tracked
-                if [ -f "$CURRENT_SESSION_FILE" ]; then
-                    TRACKED_SESSION=$(cut -d: -f1 "$CURRENT_SESSION_FILE" 2>/dev/null)
-                    if [ -n "$SIGNAL_SESSION" ] && [ -n "$TRACKED_SESSION" ] && [ "$SIGNAL_SESSION" != "$TRACKED_SESSION" ]; then
-                        log "Monitor: Session mismatch - signal:$SIGNAL_SESSION tracked:$TRACKED_SESSION - ignoring"
-                        rm -f "$RESTART_FILE"
+                if [ -f "$session_file" ]; then
+                    local tracked_session=$(cut -d: -f1 "$session_file" 2>/dev/null)
+                    # Skip session verification if in resume mode (RESUME_PENDING)
+                    if [ "$tracked_session" != "RESUME_PENDING" ] && [ -n "$signal_session" ] && [ -n "$tracked_session" ] && [ "$signal_session" != "$tracked_session" ]; then
+                        log "Monitor: Session mismatch - signal:$signal_session tracked:$tracked_session - ignoring"
+                        rm -f "$restart_file"
                         continue
                     fi
                 fi
 
-                MY_PID=$BASHPID
+                local my_pid=$BASHPID
                 # Find Claude (child of wrapper that isn't this monitor subprocess)
-                CLAUDE_PID=$(pgrep -P "$MY_WRAPPER_PID" 2>/dev/null | grep -v "^${MY_PID}$" | head -1)
-                if [ -n "$CLAUDE_PID" ]; then
-                    log "Monitor: Killing Claude PID $CLAUDE_PID (session: $SIGNAL_SESSION)"
-                    # Mark that WE killed it (not user Ctrl+C)
-                    touch "$KILLED_BY_MONITOR"
-                    # Store the working dir for restart
-                    [ -n "$SIGNAL_DIR" ] && echo "$SIGNAL_DIR" > "$RESTART_FILE.dir"
-                    # Fast kill - TERM should work, quick KILL fallback
-                    kill -TERM "$CLAUDE_PID" 2>/dev/null
+                local claude_pid=$(pgrep -P "$MY_WRAPPER_PID" 2>/dev/null | grep -v "^${my_pid}$" | head -1)
+                if [ -n "$claude_pid" ]; then
+                    log "Monitor: Killing Claude PID $claude_pid (session: $signal_session)"
+                    touch "$killed_file"
+                    [ -n "$signal_dir" ] && echo "$signal_dir" > "${restart_file}.dir"
+                    kill -TERM "$claude_pid" 2>/dev/null
                     sleep 0.2
-                    kill -9 "$CLAUDE_PID" 2>/dev/null
+                    kill -9 "$claude_pid" 2>/dev/null
                 fi
                 exit 0
             fi
@@ -215,14 +314,40 @@ start_monitor() {
 }
 
 # Check for flags
-USER_WANTS_RESUME=false
+# RESUME_MODE: User wants Claude's native session picker (not handoff system)
+# USER_WANTS_HANDOFF: User wants to load a specific handoff file
+# EXPLICIT_HANDOFF_ID: The specific handoff ID to load (required with -h)
+RESUME_MODE=false
 USER_WANTS_HANDOFF=false
+EXPLICIT_HANDOFF_ID=""
 FILTERED_ARGS=()
-for arg in "$@"; do
-    case "$arg" in
-        -r|-c|--resume|--continue) USER_WANTS_RESUME=true; FILTERED_ARGS+=("$arg") ;;
-        -h|--handoff) USER_WANTS_HANDOFF=true ;;  # Don't pass to claude
-        *) FILTERED_ARGS+=("$arg") ;;
+
+# Parse arguments with explicit handoff ID support
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -r|-c|--resume|--continue)
+            RESUME_MODE=true
+            FILTERED_ARGS+=("$1")  # Pass through for native picker
+            shift
+            ;;
+        -h|--handoff)
+            # -h requires an explicit handoff ID now
+            if [ -z "$2" ] || [[ "$2" == -* ]]; then
+                echo "Error: -h requires a handoff ID"
+                echo "Usage: claude -h HO-YYYYMMDD-HHMMSS-xxxxx"
+                echo ""
+                echo "To see available handoffs:"
+                echo "  ls ~/.claude/handoff/*.manifest.json"
+                exit 1
+            fi
+            USER_WANTS_HANDOFF=true
+            EXPLICIT_HANDOFF_ID="$2"
+            shift 2
+            ;;
+        *)
+            FILTERED_ARGS+=("$1")
+            shift
+            ;;
     esac
 done
 
@@ -233,8 +358,17 @@ WORKING_DIR="${PWD}"
 log "=== Wrapper $$ started in $WORKING_DIR ==="
 
 while true; do
-    # Record this iteration's start time for transcript matching
+    # Record this iteration's start time
     ITERATION_START=$(date +%s)
+
+    # INCREMENT ITERATION ID - this tells old subprocesses to exit
+    ITERATION_ID=$((ITERATION_ID + 1))
+    echo "$ITERATION_ID" > "$ITERATION_FILE"
+
+    # KILL ALL BACKGROUND SUBPROCESSES from previous iterations
+    # This is a safety net - they should exit when they see iteration changed,
+    # but we force-kill in case they're stuck in sleep
+    kill_iteration_subprocesses
 
     # Clean up signals and trigger locks from previous iterations
     rm -f "$RESTART_FILE" "$RESTART_FILE.dir" "$KILLED_BY_MONITOR"
@@ -242,36 +376,139 @@ while true; do
     rm -f "$CURRENT_SESSION_FILE"
 
     CHANNEL=$(get_current_channel "$WORKING_DIR")
-    log "Channel: $CHANNEL, Restart #$RESTART_COUNT"
+    log "Channel: $CHANNEL, Restart #$RESTART_COUNT, Iteration #$ITERATION_ID"
+
+    # Generate session UUID UPFRONT - no guessing needed
+    # This is the key to bulletproof session tracking
+    project_path=$(pwd | sed 's|/|-|g')
+    project_dir="$SESSION_DIR/$project_path"
+    CURRENT_SESSION_UUID=$(cat /proc/sys/kernel/random/uuid)
+    EXPECTED_TRANSCRIPT="$project_dir/${CURRENT_SESSION_UUID}.jsonl"
+    export CURRENT_SESSION_UUID EXPECTED_TRANSCRIPT
+
+    # Write session file IMMEDIATELY - before Claude even starts
+    # Claude will create the transcript with this UUID via --session-id
+    echo "${CURRENT_SESSION_UUID}:${EXPECTED_TRANSCRIPT}:$$" > "$CURRENT_SESSION_FILE"
+    log "Session ID: $CURRENT_SESSION_UUID"
 
     # Start fresh monitor for this Claude instance
     start_monitor
     log "Monitor PID: $MONITOR_PID"
 
-    # Start session tracker (background - will write session file when transcript appears)
-    track_session
-
     # Start terminal title updater (shows context % in terminal title)
     start_title_updater
 
-    # Run Claude
+    # ==========================================================================
+    # HANDOFF OWNERSHIP: Set CLAUDE_LOAD_HANDOFF based on intent
+    # ==========================================================================
+    # This env var tells the session-start hook whether to load a handoff:
+    #   - "auto:{handoff_id}" = Auto-restart from context monitor (load specific handoff)
+    #   - "manual" = User explicitly requested handoff via -h flag
+    #   - (unset) = Fresh start or resume - do NOT auto-consume handoffs
+    #
+    # Note: RESUME_MODE (-r/-c) does NOT set CLAUDE_LOAD_HANDOFF because we're
+    # loading an existing session, not a handoff. Handoffs are a fallback.
+    # ==========================================================================
+    if [ $RESTART_COUNT -gt 0 ] && [ -n "$FORCED_HANDOFF_ID" ]; then
+        # Auto-restart from context monitor - load the specific handoff
+        export CLAUDE_LOAD_HANDOFF="auto:${FORCED_HANDOFF_ID}"
+        log "CLAUDE_LOAD_HANDOFF=auto:${FORCED_HANDOFF_ID}"
+    elif [ "$USER_WANTS_HANDOFF" = true ]; then
+        # User explicitly requested handoff via -h/--handoff
+        export CLAUDE_LOAD_HANDOFF="manual"
+        log "CLAUDE_LOAD_HANDOFF=manual"
+    else
+        # Fresh start or resume - explicitly unset to prevent accidental handoff consumption
+        unset CLAUDE_LOAD_HANDOFF
+        log "CLAUDE_LOAD_HANDOFF=(unset - fresh start or resume)"
+    fi
+
+    # Run Claude - method depends on mode
     if [ $RESTART_COUNT -eq 0 ]; then
-        # First start - check if user explicitly wants handoff
-        if [ "$USER_WANTS_HANDOFF" = true ]; then
-            # Check for active handoff using manifest system
-            if type has_active_handoff &>/dev/null && has_active_handoff "$CHANNEL"; then
-                HANDOFF_FILE=$(get_active_handoff_file "$CHANNEL")
-                HANDOFF_ID=$(get_active_handoff_id "$CHANNEL")
-                log "User requested handoff, found: $HANDOFF_ID - loading"
-                $CLAUDE_BIN $CLAUDE_DEFAULT_FLAGS "Continue from handoff. The handoff should be auto-loaded by the session hook. If not, read $HANDOFF_FILE"
+        # First start
+        if [ "$RESUME_MODE" = true ]; then
+            # =================================================================
+            # RESUME MODE: Use Claude's native session picker
+            # =================================================================
+            # Don't pass --session-id - it conflicts with -r/-c
+            # verify_session_resume will detect which session the user picks.
+            # CRITICAL: Pass the specific project_dir to prevent global scanning!
+            # =================================================================
+            log "Starting in RESUME MODE (native picker, project_dir=$project_dir)"
+
+            # Write placeholder session file (will be updated by verify_session_resume)
+            echo "RESUME_PENDING::$$" > "$CURRENT_SESSION_FILE"
+
+            # Start session verifier ONLY FOR RESUME MODE
+            # Pass the specific project directory to prevent cross-session contamination
+            verify_session_resume "$project_dir"
+
+            # Background task: clean up safety handoff after successful resume
+            _resume_iteration="$ITERATION_ID"
+            _resume_iteration_file="$ITERATION_FILE"
+            (
+                sleep 3
+                # Exit if iteration changed
+                [ "$(cat "$_resume_iteration_file" 2>/dev/null)" != "$_resume_iteration" ] && exit 0
+                # Check if Claude is still running (wrapper still has a child)
+                if pgrep -P $$ >/dev/null 2>&1; then
+                    # Resume succeeded - clean up any safety handoff for this channel
+                    if type has_active_handoff &>/dev/null && has_active_handoff "$CHANNEL"; then
+                        _cleanup_id=$(get_active_handoff_id "$CHANNEL")
+                        log "Resume succeeded - archiving safety handoff $_cleanup_id"
+                        type clear_handoff &>/dev/null && clear_handoff "$CHANNEL"
+                    fi
+                fi
+            ) &
+
+            # Launch Claude with native resume (no --session-id)
+            launch_claude $CLAUDE_BIN $CLAUDE_DEFAULT_FLAGS "${FILTERED_ARGS[@]}"
+
+        elif [ "$USER_WANTS_HANDOFF" = true ]; then
+            # =================================================================
+            # HANDOFF MODE: Load a specific handoff by ID
+            # =================================================================
+            # User ran: claude -h HO-20260205-143000-abc123
+            # We load that EXACT handoff, not just any available one
+            # =================================================================
+
+            # Find the handoff file - check current and archive
+            HANDOFF_FILE=""
+            for manifest in "$HANDOFF_DIR"/*.manifest.json; do
+                [ ! -f "$manifest" ] && continue
+                if grep -q "\"id\":.*\"$EXPLICIT_HANDOFF_ID\"" "$manifest" 2>/dev/null; then
+                    _manifest_channel=$(basename "$manifest" .manifest.json)
+                    HANDOFF_FILE="$HANDOFF_DIR/${_manifest_channel}-CURRENT.md"
+                    break
+                fi
+            done
+
+            # Check archive if not found in current
+            if [ -z "$HANDOFF_FILE" ] || [ ! -f "$HANDOFF_FILE" ]; then
+                HANDOFF_FILE="$HANDOFF_DIR/archive/${EXPLICIT_HANDOFF_ID}.md"
+            fi
+
+            if [ -f "$HANDOFF_FILE" ]; then
+                log "Loading explicit handoff: $EXPLICIT_HANDOFF_ID from $HANDOFF_FILE"
+                export CLAUDE_LOAD_HANDOFF="manual:${EXPLICIT_HANDOFF_ID}"
+                launch_claude $CLAUDE_BIN $CLAUDE_DEFAULT_FLAGS --session-id "$CURRENT_SESSION_UUID" "Continue from handoff ${EXPLICIT_HANDOFF_ID}. The handoff should be auto-loaded by the session hook. If not, read $HANDOFF_FILE"
             else
-                log "User requested handoff but none found - starting fresh"
-                $CLAUDE_BIN $CLAUDE_DEFAULT_FLAGS "${FILTERED_ARGS[@]}"
+                echo "Error: Handoff $EXPLICIT_HANDOFF_ID not found"
+                echo ""
+                echo "Available handoffs:"
+                for manifest in "$HANDOFF_DIR"/*.manifest.json; do
+                    [ ! -f "$manifest" ] && continue
+                    _hid=$(grep -oP '"id":\s*"\K[^"]+' "$manifest" 2>/dev/null | head -1)
+                    [ -n "$_hid" ] && echo "  $_hid"
+                done
+                exit 1
             fi
         else
-            # Normal fresh start - session hook will check for handoffs
-            log "Starting fresh: $CLAUDE_BIN $CLAUDE_DEFAULT_FLAGS ${FILTERED_ARGS[*]}"
-            $CLAUDE_BIN $CLAUDE_DEFAULT_FLAGS "${FILTERED_ARGS[@]}"
+            # =================================================================
+            # NORMAL MODE: Fresh start with pre-determined session ID
+            # =================================================================
+            log "Starting fresh with session $CURRENT_SESSION_UUID"
+            launch_claude $CLAUDE_BIN $CLAUDE_DEFAULT_FLAGS --session-id "$CURRENT_SESSION_UUID" "${FILTERED_ARGS[@]}"
         fi
     else
         # Auto-restart - handoff should exist from pre-compact hook
@@ -315,8 +552,6 @@ while true; do
             log "Restarting (no handoff found for channel: $CHANNEL)"
         fi
 
-        NEW_SESSION=$(cat /proc/sys/kernel/random/uuid)
-
         # Show brief warning, then clear and restart
         echo ""
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -326,13 +561,68 @@ while true; do
         echo "  ⏳ Restarting in 2 seconds..."
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         sleep 2
-        # Clear screen and scrollback, FORCE new session
+        # Clear screen and scrollback
         printf '\033[2J\033[3J\033[H'
-        log "Forcing new session: $NEW_SESSION"
-        $CLAUDE_BIN $CLAUDE_DEFAULT_FLAGS --session-id "$NEW_SESSION" "$HANDOFF_PROMPT"
+        # Session UUID was already generated at loop start
+        log "Restarting with session: $CURRENT_SESSION_UUID"
+        launch_claude $CLAUDE_BIN $CLAUDE_DEFAULT_FLAGS --session-id "$CURRENT_SESSION_UUID" "$HANDOFF_PROMPT"
     fi
     EXIT_CODE=$?
     log "Claude exited: $EXIT_CODE"
+
+    # =========================================================================
+    # WALL DETECTION: Check if PTY wrapper detected a wall hit
+    # =========================================================================
+    # If wall detected, create handoff NOW (no hook timeout pressure) and restart
+    # =========================================================================
+    if [ -f "$WALL_DETECTED_FILE" ]; then
+        log "Wall detected by PTY wrapper - creating handoff"
+        rm -f "$WALL_DETECTED_FILE"
+
+        # Read session info
+        if [ -f "$CURRENT_SESSION_FILE" ]; then
+            _wall_session_info=$(cat "$CURRENT_SESSION_FILE" 2>/dev/null)
+            _wall_session_id=$(echo "$_wall_session_info" | cut -d: -f1)
+            _wall_transcript=$(echo "$_wall_session_info" | cut -d: -f2)
+        else
+            _wall_session_id="$CURRENT_SESSION_UUID"
+            _wall_transcript="$EXPECTED_TRANSCRIPT"
+        fi
+
+        # Create handoff (runs after Claude exit, no timeout pressure)
+        WALL_HANDOFF_ID=$(create_wall_handoff "$CHANNEL" "$_wall_session_id" "$_wall_transcript")
+
+        if [ -n "$WALL_HANDOFF_ID" ]; then
+            log "Wall handoff created: $WALL_HANDOFF_ID - triggering restart"
+
+            # Show user message
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "  🧱 WALL HIT: Context at 100%"
+            echo "  📁 Channel: $CHANNEL"
+            echo "  📋 Handoff: $WALL_HANDOFF_ID"
+            echo "  🔄 Auto-restarting..."
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+            # Set up for restart
+            FORCED_HANDOFF_ID="$WALL_HANDOFF_ID"
+            RESTART_COUNT=$((RESTART_COUNT + 1))
+
+            if [ $RESTART_COUNT -ge $MAX_RESTARTS ]; then
+                echo "Max restarts reached"
+                exit 1
+            fi
+
+            # Clear screen before restart
+            sleep 1
+            printf '\033[2J\033[3J\033[H'
+
+            # Continue to next iteration (restart)
+            continue
+        else
+            log "Failed to create wall handoff - normal exit"
+        fi
+    fi
 
     # Clear session tracking
     rm -f "$CURRENT_SESSION_FILE"
@@ -395,4 +685,33 @@ while true; do
 done
 
 log "=== Wrapper finished ==="
+
+# =============================================================================
+# CHECK FOR CLOSE-TAB SIGNAL
+# =============================================================================
+# If /bye or /discard requested tab close, the close-tab signal file exists.
+# We close the terminal by killing the parent shell process.
+# =============================================================================
+# Check for session-specific signal (by wrapper PID) or legacy global signal
+CLOSE_TAB_SIGNAL="$HOME/.claude/signals/close-tab-$$"
+CLOSE_TAB_SIGNAL_LEGACY="$HOME/.claude/signals/close-tab"
+if [ -f "$CLOSE_TAB_SIGNAL" ] || [ -f "$CLOSE_TAB_SIGNAL_LEGACY" ]; then
+    rm -f "$CLOSE_TAB_SIGNAL" "$CLOSE_TAB_SIGNAL_LEGACY"
+    log "Close-tab signal detected - closing terminal"
+
+    # Get the shell that started this wrapper (our parent)
+    PARENT_SHELL_PID=$PPID
+
+    # Safety check: only kill if parent is a shell
+    PARENT_CMD=$(ps -p "$PARENT_SHELL_PID" -o comm= 2>/dev/null)
+    if [[ "$PARENT_CMD" =~ ^(bash|zsh|sh|fish)$ ]]; then
+        # Small delay to let any final output display
+        sleep 0.3
+        # Kill parent shell - this closes the terminal tab
+        kill -9 "$PARENT_SHELL_PID" 2>/dev/null
+    else
+        log "Parent is not a shell ($PARENT_CMD) - not closing tab"
+    fi
+fi
+
 exit $EXIT_CODE
