@@ -557,7 +557,7 @@ while true; do
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo "  🔄 AUTO-HANDOFF: Context at 96% - creating handoff..."
         echo "  📁 Channel: $CHANNEL"
-        [ -n "$HANDOFF_ID" ] && echo "  📋 Handoff: $HANDOFF_ID"
+        [ -n "$HANDOFF_ID" ] && echo -e "  📋 Handoff: \033[1;34mclaude -h $HANDOFF_ID\033[0m"
         echo "  ⏳ Restarting in 2 seconds..."
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         sleep 2
@@ -600,7 +600,7 @@ while true; do
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             echo "  🧱 WALL HIT: Context at 100%"
             echo "  📁 Channel: $CHANNEL"
-            echo "  📋 Handoff: $WALL_HANDOFF_ID"
+            echo -e "  📋 Handoff: \033[1;34mclaude -h $WALL_HANDOFF_ID\033[0m"
             echo "  🔄 Auto-restarting..."
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
