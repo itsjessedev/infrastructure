@@ -67,15 +67,19 @@ PTY_WRAPPER="$HOME/.claude/bin/pty-wrapper.py"
 
 # Function to launch Claude (through PTY wrapper if available)
 launch_claude() {
-    # PTY wrapper now supports resume mode with picker detection
-    # It automatically switches to cooked mode when Claude's TUI picker is active
+    # Ensure PTY wrapper is executable (Write tool can strip +x when recreating files)
+    if [ -f "$PTY_WRAPPER" ] && [ ! -x "$PTY_WRAPPER" ]; then
+        chmod +x "$PTY_WRAPPER"
+        log "Fixed PTY wrapper permissions (+x)"
+    fi
+
     if [ -x "$PTY_WRAPPER" ] && [ -t 0 ]; then
-        # Use PTY wrapper for interactive sessions (including resume mode)
         log "Launching via PTY wrapper"
         python3 "$PTY_WRAPPER" "$@"
     else
-        # Direct launch (non-interactive or PTY wrapper unavailable)
-        log "Launching directly (no PTY wrapper)"
+        # No PTY wrapper = no wall detection. Log loudly.
+        log "WARNING: Launching WITHOUT PTY wrapper - wall detection DISABLED"
+        log "WARNING: PTY_WRAPPER=$PTY_WRAPPER exists=$([ -f "$PTY_WRAPPER" ] && echo yes || echo no) exec=$([ -x "$PTY_WRAPPER" ] && echo yes || echo no) tty=$([ -t 0 ] && echo yes || echo no)"
         "$@"
     fi
 }
