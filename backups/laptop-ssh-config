@@ -1,0 +1,39 @@
+# Laptop SSH Config Backup
+# Backed up: 2026-02-20
+# Source: Laptop WSL ~/.ssh/config
+
+Host devlab dev-lab
+    HostName 100.105.135.31
+    User jesse
+    Port 25831
+    IdentityFile ~/.ssh/id_ed25519
+    StrictHostKeyChecking no
+
+Host github.com
+    HostName github.com
+    User git
+    IdentityFile ~/.ssh/id_ed25519_github2
+    IdentitiesOnly yes
+
+Host junipr-vps
+    HostName 204.152.223.104
+    User deploy
+    IdentityFile ~/.ssh/id_ed25519_win
+    IdentitiesOnly yes
+
+Host desktop
+    HostName 192.168.99.145
+    User jesse
+
+Host unraid
+    HostName 100.105.135.31
+    User root
+    Port 22
+    IdentityFile ~/.ssh/id_ed25519_win
+    IdentitiesOnly yes
+
+Host *
+  ServerAliveInterval 60
+  ServerAliveCountMax 1440
+  TCPKeepAlive no
+  AddKeysToAgent yes

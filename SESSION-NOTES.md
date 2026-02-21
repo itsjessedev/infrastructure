@@ -4,7 +4,7 @@ This file tracks cross-project work and general development sessions.
 
 ## Current Status
 
-**WSL removed from both machines. Network drives configured on DESKTOP and LAPTOP.**
+**WSL removed from both machines. Network drives configured on DESKTOP and LAPTOP via `cmdkey` + `net use /persistent:yes` (no scripts or scheduled tasks). Tailscale runs on Unraid only; devlab accessed via iptables DNAT forwarding.**
 
 ## Pending Tasks
 
