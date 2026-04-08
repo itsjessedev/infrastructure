@@ -1,7 +1,7 @@
 # Devlab Process Management & OOM Prevention
 
 > Multi-layer system to prevent orphaned processes from accumulating and OOMing the devlab container or Unraid host.
-> Last updated: 2026-04-06
+> Last updated: 2026-04-08
 
 ---
 
@@ -40,14 +40,14 @@ Three passes:
    ```
    rg, grep, fgrep, egrep, find, fd, ag, ack, sed, awk, cat, head, tail, sort,
    uniq, wc, cut, tr, tee, xargs, du, ls, stat, file, tree, tar, gzip, gunzip,
-   bzip2, unzip, zip, curl, wget, jq, yq, python3, node, npm, npx, pnpm, yarn,
-   git, rsync, scp, ssh, nc, nmap, ping, dig, nslookup, host, whois, md5sum,
-   sha1sum, sha256sum, tsc, eslint, prettier, vite, webpack, next, nuxt,
-   astro, playwright, puppeteer
+   bzip2, unzip, zip, curl, wget, jq, yq, git, rsync, scp, ssh, nc, nmap, ping,
+   dig, nslookup, host, whois, md5sum, sha1sum, sha256sum
    ```
    These should never outlive their parent SSH session — if they're orphaned, kill instantly.
 
-2. **CLI process orphans (>5 min)** — `claude`, `node`, `codex` processes orphaned for more than 5 minutes.
+   **Special case:** orphaned Playwright/Puppeteer daemon/browser trees are also killed instantly when args match `playwright-core/.../cliDaemon.js` or `~/.cache/ms-playwright/...`. This catches dead browser automation without touching generic `node` dev servers.
+
+2. **CLI process orphans (>5 min)** — `claude` / `codex` CLI binaries orphaned for more than 5 minutes.
 
 3. **Runaway CPU (>10 min)** — Any detached process using >80% CPU for more than 10 minutes.
 

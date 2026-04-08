@@ -457,8 +457,9 @@ wsl --shutdown
 1. **Container memory limit (12GB / 14GB swap)** — added `--memory=12g --memory-swap=14g` to `start-devlab.sh`. Devlab now contained at the cgroup level — host can never crash from devlab memory exhaustion. Docker auto-restarts container if it OOMs internally.
 2. **PAM session cleanup hook** — `/etc/pam.d/sshd` runs `~/bin/ssh-session-cleanup` on session close. Walks the process tree from the dying sshd PID and kills all descendants instantly. Re-applied at container start by `container-startup.sh`.
 3. **Process watchdog** — `~/bin/claude-watchdog` runs every 5 min. Three passes:
-   - Tool-call orphans (rg, find, grep, sed, awk, jq, python3, node, npm, git, etc) reparented to PID 1 with no tty → kill instantly
-   - Claude/node/codex CLI processes orphaned for >5 min → kill
+   - Tool-call orphans (rg, find, grep, sed, awk, jq, git, etc) reparented to PID 1 with no tty → kill instantly
+   - Special-case orphaned Playwright daemon/browser trees matched by `cliDaemon.js` / `~/.cache/ms-playwright/` args → kill instantly
+   - Claude/codex CLI processes orphaned for >5 min → kill
    - Any process using >80% CPU detached for >10 min → kill
 4. **Process health monitor** — `~/bin/process-health-check` runs every 5 min. Lightweight monitor that writes alerts to `/tmp/process-alerts.txt`. Yellow banner shown on SSH login if alerts exist. Has `KNOWN_BACKGROUND` allowlist for legitimate background processes.
 
